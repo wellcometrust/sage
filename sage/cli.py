@@ -125,7 +125,7 @@ def deploy(
     elif image_uri == "sklearn":
         sklearn_model = SKLearnModel(
             model_data=model_path,
-            entry_point="sage/entrypoints/sklearn_entrypoints/dummy.py",
+            entry_point="",  # fill in
             role=role,
             framework_version="1.2-1",
             py_version="py3",
@@ -139,7 +139,7 @@ def deploy(
     elif image_uri == "pytorch":
         pytorch_model = PyTorchModel(
             model_data=model_path,
-            entry_point="sage/entrypoints/pytorch_entrypoints/dummy.py",
+            entry_point="",  #  fill in
             role=role,
             framework_version="2.0.0",
             py_version="py310",

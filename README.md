@@ -1,7 +1,38 @@
-# sage
-Toolkit for easy deployment of machine learning models on AWS SageMaker
+# Using the CLI tool
 
 ## Quickstart
+
+### 0. Prerequisites
+
+You will need:
+- a trained model
+- an entrypoint script
+- an S3 bucket to store the model
+
+You can create an S3 bucket via:
+```bash
+aws s3 mb s3://<bucket-name>
+```
+
+Next, zip your local model:
+```bash
+tar -czvf model.tar.gz <path-to-model>
+```
+
+Upload the zipped model to S3:
+```bash
+aws s3 cp model.tar.gz s3://<bucket-name>
+```
+
+Create an entrypoint script.
+Note that the entrypoint script must implement the:
+- `input_fn`: responsible for pre-processing the input
+- `model_fn`: responsible for loading the model
+- `predict_fn`: responsible for running the model on the input data
+- `output_fn`: post-procesing of the model's output
+
+See the example entrypoints in `example_entrypoints` folder for some toy examples.
+Note that in `model_fn`, you should refer to the model's path without the `tar.gz` extension, i.e. as if the model were local and already unzipped (SageMaker will automatically unzip the model for you).
 
 ### 1. Install dependencies and activate environment
 
