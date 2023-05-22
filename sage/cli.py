@@ -81,10 +81,7 @@ def list():
 def deploy(
     image_uri: str = typer.Argument("huggingface", help="Framework"),
     task: str = typer.Argument("text-classification", help="Task"),
-    role: str = typer.Argument(
-        "arn:aws:iam::989477750762:role/sagemaker-exec-role",
-        help="SageMaker Execution Role",
-    ),
+    role: str = typer.Argument(help="SageMaker Execution Role"),
     model_path: str = typer.Option("Wellcome/WellcomeBertMesh", help="Model path"),
     entry_point: str = typer.Option("", help="Entry point"),
     instance_count: int = typer.Option(1, help="Instance Count"),
