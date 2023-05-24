@@ -50,35 +50,6 @@ Currently, we support four frameworks for deployment, namely:
 
 In addition to these supported frameworks, the deployment can be either local or remote. For local deployment, the `--instance-type local` flag must be specified. For remote deployment, specify a SageMaker instance type, e.g. `--instance-type ml.m5.large`.
 
-Example 1: Deploy a PyTorch model locally
-```bash
-sage deploy pytorch \
-    text-classification \
-    <arn-role> \
-    --model-path <path-of-model-in-s3> \
-    --endpoint-name test \
-    --instance-type local \
-    --entry-point sage/example_entrypoints/pytorch_dummy_entrypoint.py
-```
-
-Example 2: Deploy an sklearn model locally
-```bash
-sage deploy \
-    sklearn \
-    --model-path <path-to-model-in-s3> \
-    --endpoint-name test \
-    --instance-type local
-```
-
-Example 3: Deploy a custom image from ECR to a remote endpoint
-```bash
-sage deploy \
-    aws \
-    <image-uri> \
-    --endpoint-name test \
-    --instance-type <type-of-instance>
-```
-
 ### 3. List endpoint
 
 ```bash
@@ -140,3 +111,52 @@ Displays the logs of a deployed endpoint.
 sage logs \
     --endpoint-name <endpoint-name>
 ```
+
+## Examples
+In this example, we will deploy a PyTorch model to a local endpoint.
+
+### 1. Create the model and save it
+We provide an example script to load the model and store it in a tar.gz archive. Note that this is a dummy model intended for demonstration only.
+You can find the script in `example_entrypoints/save_pt_dummy_model.py`
+
+```bash
+python example_entrypoints/save_pt_dummy_model.py
+```
+
+Note that you need to run this script from an environment with PyTorch 2.0.0 installed. We purposefully do not include PyTorch in the `pyproject.toml` file as the CLI itself does not need it and we want to keep the dependencies minimal.
+
+### 2. Upload to S3
+You should now have a `dummy.pt.tar.gz.` file on your disk. Upload it to S3:
+
+```bash
+aws s3 cp dummy.pt.tar.gz s3://<bucket-name>
+```
+
+### 3. Deploy the model
+Activate your poetry shell and run the deploy command.
+
+```bash
+poetry shell
+
+sage deploy \
+    pytorch \
+    text-classification \
+    <arn-role> \
+    --model-path s3://<bucket-name>/dummy.pt.tar.gz \
+    --endpoint-name test \
+    --instance-type local \
+    --entry-point sage/example_entrypoints/pytorch_dummy_entrypoint.py
+```
+
+This will deploy the dummy pytorch model to your local machine.
+
+### 4. Run inference:
+
+Next we'll run the inference command on this entrypoint.
+```bash
+sage predict \
+    test \
+    "This is a test sentence." \
+    --local
+```
+You should get a `Result: 1` output. This is the output of the dummy model.
