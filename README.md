@@ -75,6 +75,7 @@ Deploys a model to an inference endpoint. The model can be either from a local p
 
 ```bash
 sage deploy \
+    text-classification \
     <model-path> \
     <image-uri> \
     --endpoint-name <endpoint-name> \
@@ -93,7 +94,7 @@ sage list
 Deletes a deployed endpoint.
 ```bash
 sage delete \
-    --endpoint-name <endpoint-name>
+    <endpoint-name>
 ```
 
 ### Run inference
@@ -101,8 +102,8 @@ Runs inference on a deployed endpoint. Returns the output of the inference call 
 
 ```bash
 sage predict \
-    --endpoint-name <endpoint-name> \
-    --text <text>
+    <endpoint-name> \
+    <text>
 ```
 
 ### Logs
