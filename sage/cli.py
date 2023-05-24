@@ -1,4 +1,5 @@
 import typer
+import requests
 
 from sagemaker.predictor import Predictor
 from sagemaker.huggingface import HuggingFaceModel
@@ -54,9 +55,22 @@ def predict(
     text: str = typer.Argument(
         "The patient has a history of hypertension.", help="Text to classify"
     ),
+    local: bool = typer.Option(False, help="Is local"),
+    port: int = typer.Option(8080, help="Port"),
 ):
-    predictor = Predictor(endpoint_name, serializer=JSONSerializer())
-    result = predictor.predict({"text": text})
+    if not local:
+        predictor = Predictor(endpoint_name, serializer=JSONSerializer())
+        result = predictor.predict({"text": text})
+    else:
+        # Do a http request
+        req = requests.post(
+            f"http://localhost:{port}/invocations",
+            json={"text": text},
+            headers={"Content-Type": "application/json"},
+        )
+
+        result = req.json()
+
     typer.secho(f"Result: {result}", fg=typer.colors.GREEN)
 
 
