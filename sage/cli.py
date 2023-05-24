@@ -58,10 +58,7 @@ def predict(
     local: bool = typer.Option(False, help="Is local"),
     port: int = typer.Option(8080, help="Port"),
 ):
-    if not local:
-        predictor = Predictor(endpoint_name, serializer=JSONSerializer())
-        result = predictor.predict({"text": text})
-    else:
+    if local:
         # Do a http request
         req = requests.post(
             f"http://localhost:{port}/invocations",
@@ -70,6 +67,9 @@ def predict(
         )
 
         result = req.json()
+    else:
+        predictor = Predictor(endpoint_name, serializer=JSONSerializer())
+        result = predictor.predict({"text": text})
 
     typer.secho(f"Result: {result}", fg=typer.colors.GREEN)
 
