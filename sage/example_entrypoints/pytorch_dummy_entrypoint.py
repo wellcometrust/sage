@@ -1,16 +1,7 @@
-import torch.nn as nn
 import os
 import torch
 import json
-
-
-class Dummy(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.fc1 = nn.Linear(1, 1)
-
-    def forward(self, x):
-        return 1
+from pt_dummy import Dummy
 
 
 def model_fn(model_path: str):
