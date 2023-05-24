@@ -52,11 +52,13 @@ In addition to these supported frameworks, the deployment can be either local or
 
 Example 1: Deploy a PyTorch model locally
 ```bash
-sage deploy \
-    pytorch \
-    --model-path <path-to-model-in-s3> \
+sage deploy pytorch \
+    text-classification \
+    <arn-role> \
+    --model-path <path-of-model-in-s3> \
     --endpoint-name test \
-    --instance-type local
+    --instance-type local \
+    --entry-point sage/example_entrypoints/pytorch_dummy_entrypoint.py
 ```
 
 Example 2: Deploy an sklearn model locally
@@ -107,6 +109,7 @@ sage deploy \
     --endpoint-name <endpoint-name> \
     --instance-type <instance-type> \
     --instance-count <instance-count> \
+    --entry-point <entry-point>
 ```
 
 ### List endpoints
