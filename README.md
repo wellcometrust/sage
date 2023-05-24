@@ -37,6 +37,7 @@ Note that in `model_fn`, you should refer to the model's path without the `tar.g
 ### 1. Install dependencies and activate environment
 
 ```bash
+curl -sSL https://install.python-poetry.org | python3 -
 poetry install
 poetry shell
 ```
@@ -61,7 +62,7 @@ Initially, the endpoint will be in the `Creating` state. Wait until it is in the
 ### 4. Run inference
 
 ```bash
-sage predict --endpoint-name test --text "This is a test sentence."
+sage predict test "This is a test sentence."
 ```
 
 The output of the inference call will be displayed to stdout.
