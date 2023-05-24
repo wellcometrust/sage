@@ -39,11 +39,7 @@ def logs(endpoint_name):
 
 
 @app.command()
-def delete(
-    endpoint_name: str = typer.Argument(
-        "huggingface-pytorch-inference-2021-11-30-22-03-59-851", help="Endpoint Name"
-    )
-):
+def delete(endpoint_name: str = typer.Argument(help="Endpoint Name")):
     predictor = Predictor(endpoint_name)
     predictor.delete_endpoint()
     typer.secho(f"Deleted endpoint: {endpoint_name}", fg=typer.colors.GREEN)
