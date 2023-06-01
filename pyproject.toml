@@ -1,0 +1,21 @@
+[tool.poetry]
+name = "sage"
+version = "0.1.0"
+description = "A CLI tool for managing SageMaker resources"
+authors = ["Your Name <you@example.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+typer = {extras = ["all"], version = "^0.9.0"}
+sagemaker = "^2.151.0"
+boto3 = "^1.26.125"
+pre-commit = "^3.3.1"
+requests = "^2.31.0"
+
+[tool.poetry.scripts]
+sage = "sage.cli:app"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
