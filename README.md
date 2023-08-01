@@ -42,7 +42,7 @@ poetry install
 poetry shell
 ```
 
-### 2. Deploy an infernece endpoint
+### 2. Deploy an inference endpoint
 Currently, we support four frameworks for deployment, namely:
 - `aws`: This is where you specify an image URI that is available in ECR. This image will be used as the entrypoint for the deployment app.
 - `pytorch`: This is where you specify a path to a PyTorch model in an S3 bucket. Model must be tar-gzip compressed.
@@ -122,7 +122,7 @@ We provide an example script to load the model and store it in a tar.gz archive.
 You can find the script in `example_entrypoints/save_pt_dummy_model.py`
 
 ```bash
-python example_entrypoints/save_pt_dummy_model.py
+python scripts/save_pt_dummy_model.py
 ```
 
 Note that you need to run this script from an environment with PyTorch 2.0.0 installed. We purposefully do not include PyTorch in the `pyproject.toml` file as the CLI itself does not need it and we want to keep the dependencies minimal.

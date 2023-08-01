@@ -7,10 +7,17 @@ from sagemaker.sklearn import SKLearnModel
 from sagemaker.pytorch.model import PyTorchModel
 from sagemaker.model import Model
 from sagemaker.serializers import JSONSerializer
+from sagemaker.local import LocalSession
 from datetime import datetime
 from boto3 import client as boto3_client
 
 app = typer.Typer()
+
+
+def _deploy_locally(model):
+    sagemaker_session = LocalSession()
+    sagemaker_session.config = {'local': {'local_code': True}}
+    model.sagemaker_session = sagemaker_session
 
 
 @app.command()
@@ -113,6 +120,9 @@ def deploy(
             role=role,
         )
 
+        if instance_type.lower().strip() == 'local':
+            _deploy_locally(huggingface_model)
+
         huggingface_model.deploy(
             initial_instance_count=instance_count,
             instance_type=instance_type,
@@ -122,6 +132,9 @@ def deploy(
 
     elif "amazonaws" in image_uri:
         model = Model(image_uri=image_uri, role=role)
+
+        if instance_type.lower().strip() == 'local':
+            _deploy_locally(model)
 
         model.deploy(
             initial_instance_count=instance_count,
@@ -138,6 +151,9 @@ def deploy(
             py_version="py3",
         )
 
+        if instance_type.lower().strip() == 'local':
+            _deploy_locally(sklearn_model)
+
         sklearn_model.deploy(
             initial_instance_count=instance_count,
             instance_type=instance_type,
@@ -151,6 +167,9 @@ def deploy(
             framework_version="2.0.0",
             py_version="py310",
         )
+
+        if instance_type.lower().strip() == 'local':
+            _deploy_locally(pytorch_model)
 
         pytorch_model.deploy(
             initial_instance_count=instance_count,
