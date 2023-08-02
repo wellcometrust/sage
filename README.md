@@ -75,15 +75,19 @@ Deploys a model to an inference endpoint. The model can be either from a local p
 
 
 ```bash
-sage deploy \
-    text-classification \
-    <model-path> \
+sage deploy 
     <image-uri> \
-    --endpoint-name <endpoint-name> \
-    --instance-type <instance-type> \
+    <task> \
+    <role> \
+    --model-path <model-path> \
+    --entry-point <entry-point> \
     --instance-count <instance-count> \
-    --entry-point <entry-point>
+    --instance-type <instance-type> \
+    --endpoint-name <endpoint-name>
 ```
+- `image-uri` here means `pytorch`, `transformers`, `sklearn` or `aws`
+- `task` means the type of task, by default `text-classification`
+- `role` here means your `arn:...` role with permissions for sagemaker
 
 ### List endpoints
 Lists all available endpoints, along with their status.
