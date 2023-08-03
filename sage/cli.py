@@ -1,7 +1,7 @@
 import typer
 import requests
 
-from sagemaker import Predictor
+from sagemaker.predictor import Predictor
 from sagemaker.huggingface import HuggingFaceModel
 from sagemaker.sklearn import SKLearnModel
 from sagemaker.pytorch.model import PyTorchModel
@@ -18,26 +18,6 @@ def _deploy_locally(model):
     sagemaker_session = LocalSession()
     sagemaker_session.config = {'local': {'local_code': True}}
     model.sagemaker_session = sagemaker_session
-
-
-def _get_predictor(custom_predictor_path):
-    if custom_predictor_path is None:
-        return None
-    else:
-        mod = __import__(custom_predictor_path, fromlist=['CustomPredictor'])
-        klass = getattr(mod, 'CustomPredictor')
-        predictor_class = klass
-    return predictor_class
-
-
-def _add_custom_predictor(endpoint_name, custom_predictor_path):
-    sagemaker_client = boto3_client("sagemaker")
-    endpoint = sagemaker_client.describe_endpoint(EndpointName=endpoint_name)
-    endpoint_arn = endpoint['EndpointArn']
-    sagemaker_client.add_tags(ResourceArn=endpoint_arn, Tags=[
-        {'Key': 'custom_predictor_path',
-         'Value': custom_predictor_path}
-    ])
 
 
 @app.command()
@@ -90,20 +70,20 @@ def predict(
         )
 
         result = req.json()
+        typer.secho(f"Result: {result}", fg=typer.colors.GREEN)
     else:
-        custom_predictor = _get_custom_predictor(endpoint_name)
-        print(custom_predictor)
-        predictor_class = _get_predictor(custom_predictor)
-        if predictor_class is None:
-            predictor_class = Predictor
-
-        predictor = predictor_class(endpoint_name,
-                                    sagemaker_session=None,
-                                    serializer=JSONSerializer()
-                                    )
-        result = predictor.predict(data={"text": text})
-
-    typer.secho(f"Result: {result}", fg=typer.colors.GREEN)
+        predictor = Predictor(endpoint_name,
+                              sagemaker_session=None,
+                              serializer=JSONSerializer()
+                              )
+        try:
+            result = predictor.predict(data={"text": text})
+            typer.secho(f"Result: {result}", fg=typer.colors.GREEN)
+        except Exception as e:
+            typer.secho(f"The Prediction endpoint model returned an error. If the model is big, this may happen due "
+                        f"to the model not being ready yet. Try again after some minutes. If the problem persists, "
+                        f"analyse the logs using\n\n`sage logs <endpoint-name>`.", fg=typer.colors.YELLOW)
+            typer.secho(f"Error: {e}")
 
 
 @app.command()
@@ -115,7 +95,6 @@ def list_endpoints():
     )
 
     for endpoint in response["Endpoints"]:
-        print(endpoint)
         typer.secho("-" * 10, fg=typer.colors.GREEN)
         typer.secho(
             f"Endpoint name: {endpoint['EndpointName']}\
@@ -133,7 +112,6 @@ def list_models():
     )
 
     for model in response["Models"]:
-        print(model)
         typer.secho("-" * 10, fg=typer.colors.GREEN)
         typer.secho(
             f"Model name: {model['ModelName']}",
@@ -144,16 +122,16 @@ def list_models():
 @app.command()
 def list_tags(resource_arn: str = typer.Argument("", help="Resource arn")):
     if resource_arn.strip() == '':
-        print("Please specify a resource arn to get tags from.")
+        typer.secho("Please specify a resource arn to get tags from.", fg=typer.colors.RED)
         exit(-1)
     sagemaker_client = boto3_client("sagemaker")
 
-    print(sagemaker_client.list_tags(ResourceArn=resource_arn))
+    typer.secho(sagemaker_client.list_tags(ResourceArn=resource_arn), fg=typer.colors.GREEN)
 
 
 def _get_tags_from_endpoint(endpoint: str = typer.Argument("", help="Endpoint name")):
     if endpoint.strip() == '':
-        print("Please specify an Endpoint name to get tags from.")
+        typer.secho("Please specify an Endpoint name to get tags from.", fg=typer.colors.RED)
         exit(-1)
 
     sagemaker_client = boto3_client("sagemaker")
@@ -164,24 +142,13 @@ def _get_tags_from_endpoint(endpoint: str = typer.Argument("", help="Endpoint na
 @app.command()
 def list_tags_from_endpoint(endpoint: str = typer.Argument("", help="Endpoint name")):
     tags = _get_tags_from_endpoint(endpoint)
-    print(tags)
-
-
-@app.command()
-def _get_custom_predictor(endpoint: str = typer.Argument("", help="Endpoint name")):
-    tags = _get_tags_from_endpoint(endpoint)
-    result = list(filter(lambda x: x['Key'] == 'custom_predictor_path', tags['Tags']))
-    if len(result) > 0:
-        if 'Value' in result[0]:
-            return result[0]['Value']
-    return None
+    typer.secho(tags, fg=typer.colors.GREEN)
 
 
 @app.command()
 def describe_endpoint(endpoint_name: str = typer.Argument("", help="Endpoint name")):
     sagemaker_client = boto3_client("sagemaker")
-    print(sagemaker_client.describe_endpoint(EndpointName=endpoint_name))
-    print(sagemaker_client.describe_endpoint_config(EndpointConfigName=endpoint_name))
+    typer.secho(sagemaker_client.describe_endpoint(EndpointName=endpoint_name), fg=typer.colors.GREEN)
 
 
 @app.command()
@@ -193,8 +160,7 @@ def deploy(
     entry_point: str = typer.Option("", help="Entry point"),
     instance_count: int = typer.Option(1, help="Instance Count"),
     instance_type: str = typer.Option("ml.t2.medium", help="Instance Type"),
-    endpoint_name: str = typer.Option("wellcome-bert-mesh", help="Endpoint Name"),
-    custom_predictor_path: str = typer.Option(None, help="Path to a custom predictor file")
+    endpoint_name: str = typer.Option("wellcome-bert-mesh", help="Endpoint Name")
 ):
     if not endpoint_name:
         now = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
@@ -202,27 +168,30 @@ def deploy(
 
     if image_uri.lower().strip() in ["transformers", "huggingface"]:
 
+        env = {"HF_TASK": task}
+        model_data = model_path
+
+        if not model_path.startswith('s3:'):
+            typer.secho("Your model is not stored in s3. The inference from models from Hugging Face hub is not"
+                        "completely supported by Sagemaker. If it fails, please see README.md section 'Uploading"
+                        " custom Hugging Face model to S3' to solve this problem.")
+
+        if not model_path.startswith('s3:'):
+            env = {"HF_MODEL_ID": model_path, "HF_TASK": task}
+            model_data = None
+
+        huggingface_model = HuggingFaceModel(
+            transformers_version="4.26.0",
+            pytorch_version="1.13.1",
+            py_version="py39",
+            entry_point=entry_point,
+            model_data=model_data,
+            env=env,
+            role=role
+        )
+
         if instance_type.lower().strip() == 'local':
-            # `hub` not supported in `local`mode, you need to use s3
-            # https://github.com/aws/sagemaker-python-sdk/issues/2743
-            huggingface_model = HuggingFaceModel(
-                transformers_version="4.26.0",
-                pytorch_version="1.13.1",
-                py_version="py39",
-                model_data=model_path,
-                role=role
-            )
             _deploy_locally(huggingface_model)
-        else:
-            hub = {"HF_MODEL_ID": model_path, "HF_TASK": task}
-            huggingface_model = HuggingFaceModel(
-                transformers_version="4.26.0",
-                pytorch_version="1.13.1",
-                py_version="py39",
-                entry_point=entry_point,
-                env=hub,
-                role=role
-            )
 
         huggingface_model.deploy(
             initial_instance_count=instance_count,
@@ -248,7 +217,7 @@ def deploy(
     elif image_uri.lower().strip() == "sklearn":
         sklearn_model = SKLearnModel(
             model_data=model_path,
-            entry_point=entry_point,  # fill in
+            entry_point=entry_point,
             role=role,
             framework_version="1.2-1",
             py_version="py3"
@@ -266,11 +235,10 @@ def deploy(
     elif image_uri.lower().strip() == "pytorch":
         pytorch_model = PyTorchModel(
             model_data=model_path,
-            entry_point=entry_point,  #  fill in
+            entry_point=entry_point,
             role=role,
             framework_version="2.0.0",
-            py_version="py310",
-            predictor_cls=_get_predictor(custom_predictor_path)
+            py_version="py310"
         )
 
         if instance_type.lower().strip() == 'local':
@@ -285,8 +253,5 @@ def deploy(
     else:
         raise NotImplementedError(f"Image URI {image_uri} not supported.\n"
                                   f"Supported: pytorch | transformers | aws | sklearn")
-
-    if custom_predictor_path is not None:
-        _add_custom_predictor(endpoint_name, custom_predictor_path)
 
     typer.secho(f"Deployed to {endpoint_name}", fg=typer.colors.GREEN)
