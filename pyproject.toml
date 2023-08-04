@@ -12,6 +12,7 @@ sagemaker = "^2.151.0"
 boto3 = "^1.26.125"
 pre-commit = "^3.3.1"
 requests = "^2.31.0"
+pyyaml = "^6.0.1"
 
 [tool.poetry.scripts]
 sage = "sage.cli:app"

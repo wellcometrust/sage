@@ -1,8 +1,10 @@
+import json
+
 import typer
 import requests
 
 from sagemaker.predictor import Predictor
-from sagemaker.huggingface import HuggingFaceModel
+from sagemaker.huggingface import HuggingFaceModel, get_huggingface_llm_image_uri
 from sagemaker.sklearn import SKLearnModel
 from sagemaker.pytorch.model import PyTorchModel
 from sagemaker.model import Model
@@ -53,19 +55,20 @@ def predict(
     ),
     local: bool = typer.Option(False, help="Is local"),
     port: int = typer.Option(8080, help="Port"),
+    text_field: str = typer.Option("text", help="Text field"),
 ):
     if local:
         # Do a http request
         req = requests.post(
             f"http://localhost:{port}/invocations",
-            json={"text": text},
+            json={text_field: text},
             headers={"Content-Type": "application/json"},
         )
 
         result = req.json()
     else:
         predictor = Predictor(endpoint_name, serializer=JSONSerializer())
-        result = predictor.predict({"text": text})
+        result = predictor.predict({text_field: text})
 
     typer.secho(f"Result: {result}", fg=typer.colors.GREEN)
 
@@ -90,26 +93,31 @@ def list():
 @app.command()
 def deploy(
     image_uri: str = typer.Argument("huggingface", help="Framework"),
-    task: str = typer.Argument("text-classification", help="Task"),
     role: str = typer.Argument(help="SageMaker Execution Role"),
+    task: str = typer.Option("text-classification", help="Task"),
     model_path: str = typer.Option("Wellcome/WellcomeBertMesh", help="Model path"),
     entry_point: str = typer.Option("", help="Entry point"),
     instance_count: int = typer.Option(1, help="Instance Count"),
     instance_type: str = typer.Option("ml.t2.medium", help="Instance Type"),
+    num_gpus: int = typer.Option(1, help="Number of GPUs"),
+    quantize: bool = typer.Option(False, help="Quantize"),
     endpoint_name: str = typer.Option("wellcome-bert-mesh", help="Endpoint Name"),
 ):
     if not endpoint_name:
         now = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
         endpoint_name = f"{model_path}-{now}"
 
-    hub = {"HF_MODEL_ID": model_path, "HF_TASK": task}
+    if image_uri == "huggingface":
+        config = {
+            "HF_MODEL_ID": model_path,
+            "HF_TASK": task
+        }
 
-    if image_uri == "transformers":
         huggingface_model = HuggingFaceModel(
             transformers_version="4.26.0",
             pytorch_version="1.13.1",
             py_version="py39",
-            env=hub,
+            env=config,
             role=role,
         )
 
@@ -118,6 +126,29 @@ def deploy(
             instance_type=instance_type,
             role=role,
             endpoint_name=endpoint_name,
+        )
+    elif image_uri == "huggingface-llm":
+        config = {
+            "HF_MODEL_ID": model_path,
+            "SM_NUM_GPUS": json.dumps(num_gpus),
+            "MAX_INPUT_LENGTH": json.dumps(1024),
+            "MAX_TOTAL_TOKENS": json.dumps(2048),
+        }
+        if quantize:
+            config["HF_MODEL_QUANTIZE"] = "bitsandbytes"
+
+        image_uri = get_huggingface_llm_image_uri("huggingface", version="0.8.2")
+        
+        model = HuggingFaceModel(
+            role = role,
+            image_uri = image_uri,
+            env=config
+        )
+        model.deploy(
+            initial_instance_count=instance_count,
+            instance_type=instance_type,
+            container_startup_health_check_timeout=400,
+            endpoint_name=endpoint_name
         )
 
     elif "amazonaws" in image_uri:
