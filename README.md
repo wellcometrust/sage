@@ -131,7 +131,7 @@ git clone https://huggingface.co/Wellcome/WellcomeBertMesh
 ```bash
 cd WellcomeBertMesh
 mkdir code
-cp sage/handlers/huggingface/inference.py code/
+cp sage/handlers/huggingface_bertmesh/inference.py code/
 ```
 
 #### Zip everything
