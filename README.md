@@ -14,7 +14,7 @@ It may be just a model (e.g., `pytorch_model.pt`) or a whole set of files as, fo
 IMPORTANT: If you have a folder, It's very important you don't zip the folder, but the contents of the folder itself.
 
 #### About the handler script.
-Note that each model requires an inference handler script, implementing the following Sagemaker interface functions:
+Note that some models require an inference handler script, implementing the following Sagemaker interface functions:
 - `input_fn`: responsible for pre-processing the input
 - `model_fn`: responsible for loading the model
 - `predict_fn`: responsible for running the model on the input data
@@ -72,7 +72,7 @@ sage deploy
    - `aws`: This is where you specify an image URI that is available in ECR. This image will be used as the entrypoint for the deployment app.
    - `pytorch`: This is where you specify a path to a PyTorch model in an S3 bucket. Model must be tar-gzip compressed.
    - `sklearn`: This is where you specify a path to a scikit-learn model in an S3 bucket. Model must be tar-gzip compressed.
-   - `huggingface`: This is where a model from the [HuggingFace model repository](https://huggingface.co/models) is deployed. The model name must be specified.
+   - `transformers`: This is where a model from the [HuggingFace model repository](https://huggingface.co/models) is deployed. The model name must be specified.
 - `task` means the type of task, by default `text-classification`
 - `role` here means your `arn:...` role with permissions for sagemaker
 - `model-path` is the path to `s3` where your model lies. You can also use model names if using hugging face, 
