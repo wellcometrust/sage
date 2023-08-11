@@ -73,15 +73,24 @@ def predict(
         )
 
         result = req.json()
+        typer.secho(f"Result: {result}", fg=typer.colors.GREEN)
     else:
-        predictor = Predictor(endpoint_name, serializer=JSONSerializer())
-        result = predictor.predict({text_field: text})
-
-    typer.secho(f"Result: {result}", fg=typer.colors.GREEN)
+        predictor = Predictor(endpoint_name,
+                              sagemaker_session=None,
+                              serializer=JSONSerializer()
+                              )
+        try:
+            result = predictor.predict(data={text_field: text})
+            typer.secho(f"Result: {result}", fg=typer.colors.GREEN)
+        except Exception as e:
+            typer.secho(f"The Prediction endpoint model returned an error. If the model is big, this may happen due "
+                        f"to the model not being ready yet. Try again after some minutes. If the problem persists, "
+                        f"analyse the logs using\n\n`sage logs <endpoint-name>`.", fg=typer.colors.YELLOW)
+            typer.secho(f"Error: {e}")
 
 
 @app.command()
-def list():
+def list_endpoints():
     sagemaker_client = boto3_client("sagemaker")
 
     response = sagemaker_client.list_endpoints(
@@ -95,6 +104,54 @@ def list():
                     \nEndpoint status: {endpoint['EndpointStatus']}",
             fg=typer.colors.GREEN,
         )
+
+
+@app.command()
+def list_models():
+    sagemaker_client = boto3_client("sagemaker")
+
+    response = sagemaker_client.list_models(
+        SortBy="CreationTime", SortOrder="Descending"
+    )
+
+    for model in response["Models"]:
+        typer.secho("-" * 10, fg=typer.colors.GREEN)
+        typer.secho(
+            f"Model name: {model['ModelName']}",
+            fg=typer.colors.GREEN,
+        )
+
+
+@app.command()
+def list_tags(resource_arn: str = typer.Argument("", help="Resource arn")):
+    if resource_arn.strip() == '':
+        typer.secho("Please specify a resource arn to get tags from.", fg=typer.colors.RED)
+        exit(-1)
+    sagemaker_client = boto3_client("sagemaker")
+
+    typer.secho(sagemaker_client.list_tags(ResourceArn=resource_arn), fg=typer.colors.GREEN)
+
+
+def _get_tags_from_endpoint(endpoint: str = typer.Argument("", help="Endpoint name")):
+    if endpoint.strip() == '':
+        typer.secho("Please specify an Endpoint name to get tags from.", fg=typer.colors.RED)
+        exit(-1)
+
+    sagemaker_client = boto3_client("sagemaker")
+    description = sagemaker_client.describe_endpoint(EndpointName=endpoint)
+    return sagemaker_client.list_tags(ResourceArn=description['EndpointArn'])
+
+
+@app.command()
+def list_tags_from_endpoint(endpoint: str = typer.Argument("", help="Endpoint name")):
+    tags = _get_tags_from_endpoint(endpoint)
+    typer.secho(tags, fg=typer.colors.GREEN)
+
+
+@app.command()
+def describe_endpoint(endpoint_name: str = typer.Argument("", help="Endpoint name")):
+    sagemaker_client = boto3_client("sagemaker")
+    typer.secho(sagemaker_client.describe_endpoint(EndpointName=endpoint_name), fg=typer.colors.GREEN)
 
 
 @app.command()
@@ -114,18 +171,30 @@ def deploy(
         now = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
         endpoint_name = f"{model_path}-{now}"
 
-    if image_uri == "huggingface":
+    if image_uri.lower().strip() in ["transformers", "huggingface"]:
+
         config = {
             "HF_MODEL_ID": model_path,
             "HF_TASK": task
         }
+        model_data = model_path
+
+        if not model_path.startswith('s3:'):
+            typer.secho("Your model is not stored in s3. The inference from models from Hugging Face hub is not"
+                        "completely supported by Sagemaker. If it fails, please see README.md section 'Uploading"
+                        " custom Hugging Face model to S3' to solve this problem.")
+
+            config = {"HF_MODEL_ID": model_path, "HF_TASK": task}
+            model_data = None
 
         huggingface_model = HuggingFaceModel(
             transformers_version="4.26.0",
             pytorch_version="1.13.1",
             py_version="py39",
+            entry_point=entry_point,
+            model_data=model_data,
             env=config,
-            role=role,
+            role=role
         )
 
         if instance_type.lower().strip() == 'local':
@@ -161,8 +230,10 @@ def deploy(
             endpoint_name=endpoint_name
         )
 
-    elif "amazonaws" in image_uri:
-        model = Model(image_uri=image_uri, role=role)
+    elif image_uri.lower().strip() in ["amazonaws", "amazon", "aws"]:
+        model = Model(image_uri=image_uri,
+                      role=role
+                      )
 
         if instance_type.lower().strip() == 'local':
             _deploy_locally(model)
@@ -173,13 +244,13 @@ def deploy(
             endpoint_name=endpoint_name,
         )
 
-    elif image_uri == "sklearn":
+    elif image_uri.lower().strip() == "sklearn":
         sklearn_model = SKLearnModel(
             model_data=model_path,
-            entry_point=entry_point,  # fill in
+            entry_point=entry_point,
             role=role,
             framework_version="1.2-1",
-            py_version="py3",
+            py_version="py3"
         )
 
         if instance_type.lower().strip() == 'local':
@@ -190,13 +261,14 @@ def deploy(
             instance_type=instance_type,
             endpoint_name=endpoint_name,
         )
-    elif image_uri == "pytorch":
+
+    elif image_uri.lower().strip() == "pytorch":
         pytorch_model = PyTorchModel(
             model_data=model_path,
-            entry_point=entry_point,  #  fill in
+            entry_point=entry_point,
             role=role,
             framework_version="2.0.0",
-            py_version="py310",
+            py_version="py310"
         )
 
         if instance_type.lower().strip() == 'local':
@@ -209,6 +281,7 @@ def deploy(
         )
 
     else:
-        raise NotImplementedError(f"Image URI {image_uri} not supported")
+        raise NotImplementedError(f"Image URI {image_uri} not supported.\n"
+                                  f"Supported: pytorch | transformers | aws | sklearn")
 
     typer.secho(f"Deployed to {endpoint_name}", fg=typer.colors.GREEN)
