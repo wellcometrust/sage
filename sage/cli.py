@@ -1,8 +1,10 @@
+import json
+
 import typer
 import requests
 
 from sagemaker.predictor import Predictor
-from sagemaker.huggingface import HuggingFaceModel
+from sagemaker.huggingface import HuggingFaceModel, get_huggingface_llm_image_uri
 from sagemaker.sklearn import SKLearnModel
 from sagemaker.pytorch.model import PyTorchModel
 from sagemaker.model import Model
@@ -59,13 +61,14 @@ def predict(
         "The patient has a history of hypertension.", help="Text to classify"
     ),
     local: bool = typer.Option(False, help="Is local"),
-    port: int = typer.Option(8080, help="Port")
+    port: int = typer.Option(8080, help="Port"),
+    text_field: str = typer.Option("text", help="Text field"),
 ):
     if local:
         # Do a http request
         req = requests.post(
             f"http://localhost:{port}/invocations",
-            json={"text": text},
+            json={text_field: text},
             headers={"Content-Type": "application/json"},
         )
 
@@ -77,7 +80,7 @@ def predict(
                               serializer=JSONSerializer()
                               )
         try:
-            result = predictor.predict(data={"text": text})
+            result = predictor.predict(data={text_field: text})
             typer.secho(f"Result: {result}", fg=typer.colors.GREEN)
         except Exception as e:
             typer.secho(f"The Prediction endpoint model returned an error. If the model is big, this may happen due "
@@ -154,13 +157,15 @@ def describe_endpoint(endpoint_name: str = typer.Argument("", help="Endpoint nam
 @app.command()
 def deploy(
     image_uri: str = typer.Argument("huggingface", help="Framework"),
-    task: str = typer.Argument("text-classification", help="Task"),
     role: str = typer.Argument(help="SageMaker Execution Role"),
+    task: str = typer.Option("text-classification", help="Task"),
     model_path: str = typer.Option("Wellcome/WellcomeBertMesh", help="Model path"),
     entry_point: str = typer.Option("", help="Entry point"),
     instance_count: int = typer.Option(1, help="Instance Count"),
     instance_type: str = typer.Option("ml.t2.medium", help="Instance Type"),
-    endpoint_name: str = typer.Option("wellcome-bert-mesh", help="Endpoint Name")
+    num_gpus: int = typer.Option(1, help="Number of GPUs"),
+    quantize: bool = typer.Option(False, help="Quantize"),
+    endpoint_name: str = typer.Option("wellcome-bert-mesh", help="Endpoint Name"),
 ):
     if not endpoint_name:
         now = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
@@ -168,7 +173,10 @@ def deploy(
 
     if image_uri.lower().strip() in ["transformers", "huggingface"]:
 
-        env = {"HF_TASK": task}
+        config = {
+            "HF_MODEL_ID": model_path,
+            "HF_TASK": task
+        }
         model_data = model_path
 
         if not model_path.startswith('s3:'):
@@ -176,8 +184,7 @@ def deploy(
                         "completely supported by Sagemaker. If it fails, please see README.md section 'Uploading"
                         " custom Hugging Face model to S3' to solve this problem.")
 
-        if not model_path.startswith('s3:'):
-            env = {"HF_MODEL_ID": model_path, "HF_TASK": task}
+            config = {"HF_MODEL_ID": model_path, "HF_TASK": task}
             model_data = None
 
         huggingface_model = HuggingFaceModel(
@@ -186,7 +193,7 @@ def deploy(
             py_version="py39",
             entry_point=entry_point,
             model_data=model_data,
-            env=env,
+            env=config,
             role=role
         )
 
@@ -198,6 +205,29 @@ def deploy(
             instance_type=instance_type,
             role=role,
             endpoint_name=endpoint_name,
+        )
+    elif image_uri == "huggingface-llm":
+        config = {
+            "HF_MODEL_ID": model_path,
+            "SM_NUM_GPUS": json.dumps(num_gpus),
+            "MAX_INPUT_LENGTH": json.dumps(1024),
+            "MAX_TOTAL_TOKENS": json.dumps(2048),
+        }
+        if quantize:
+            config["HF_MODEL_QUANTIZE"] = "bitsandbytes"
+
+        image_uri = get_huggingface_llm_image_uri("huggingface", version="0.8.2")
+        
+        model = HuggingFaceModel(
+            role = role,
+            image_uri = image_uri,
+            env=config
+        )
+        model.deploy(
+            initial_instance_count=instance_count,
+            instance_type=instance_type,
+            container_startup_health_check_timeout=400,
+            endpoint_name=endpoint_name
         )
 
     elif image_uri.lower().strip() in ["amazonaws", "amazon", "aws"]:
