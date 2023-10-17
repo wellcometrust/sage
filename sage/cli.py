@@ -230,7 +230,7 @@ def deploy(
             endpoint_name=endpoint_name
         )
 
-    elif image_uri.lower().strip() in ["amazonaws", "amazon", "aws"]:
+    elif "amazonaws" in image_uri:
         model = Model(image_uri=image_uri,
                       role=role
                       )
